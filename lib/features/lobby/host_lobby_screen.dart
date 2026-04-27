@@ -192,13 +192,31 @@ class HostLobbyScreen extends ConsumerWidget {
                 style: GoogleFonts.poppins(color: Colors.white60)),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
+              
+              print('\n======================================');
+              print('=== HOST LEAVING LOBBY ===');
+              print('======================================');
+              print('[HOST-LEAVE] Timestamp: ${DateTime.now()}');
+              print('[HOST-LEAVE] Session ID: $sessionId');
+              
+              try {
+                print('[HOST-LEAVE] Step 1: Ending game session...');
+                await ref.read(gameRepositoryProvider).endSession(sessionId);
+                print('[HOST-LEAVE] ✓ Game session ended - Status set to "finished"');
+                print('[HOST-LEAVE] Step 2: All players should see game status change');
+              } catch (e) {
+                print('[HOST-LEAVE] ✗ Error ending session: $e');
+              }
+              
               // Check if user is logged in (not anonymous)
               final currentUser = ref.read(authRepositoryProvider).currentUser;
               final isLoggedIn = currentUser != null && !currentUser.isAnonymous;
-              // Navigate to home for logged-in users, join for guests
+              
+              print('[HOST-LEAVE] Step 3: Navigating to ${isLoggedIn ? '/home' : '/join'}');
               context.go(isLoggedIn ? '/home' : '/join');
+              print('[HOST-LEAVE] === DONE ===\n');
             },
             child: Text('Leave',
                 style: GoogleFonts.poppins(color: Colors.redAccent)),

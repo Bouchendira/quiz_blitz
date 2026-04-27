@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../data/models/game_session_model.dart';
 import '../../data/models/game_player_model.dart';
 import '../../data/repositories/providers.dart';
+import '../../main.dart';
  
 class PlayerLobbyScreen extends ConsumerStatefulWidget {
   final String sessionId;
@@ -44,12 +45,27 @@ class _PlayerLobbyScreenState extends ConsumerState<PlayerLobbyScreen>
     final playersAsync = ref.watch(watchPlayersProvider(widget.sessionId));
  
     // Listen to session changes to auto-navigate when host starts the game
-    ref.listen(watchSessionProvider(widget.sessionId), (_, next) {
+    // OR when host leaves and session is set to 'finished'
+    ref.listen(watchSessionProvider(widget.sessionId), (prev, next) {
+      print('[PLAYER-LISTENER] Previous: ${prev?.value?.status}, Next: ${next.value?.status}');
       next.whenData((session) {
+        print('[PLAYER-LISTENER] Session status changed to: ${session.status}');
+        print('[PLAYER-LISTENER] Status type: ${session.status.runtimeType}');
+        print('[PLAYER-LISTENER] Checking question: ${session.status == GameStatus.question}');
+        print('[PLAYER-LISTENER] Checking finished: ${session.status == GameStatus.finished}');
+        
         if (session.status == GameStatus.question && mounted) {
+          print('[PLAYER-LISTENER] ✓ Status is QUESTION - navigating to game');
           context.go(
             '/play/${widget.sessionId}?playerId=${widget.playerId ?? ''}',
           );
+        } else if (session.status == GameStatus.finished && mounted) {
+          print('[PLAYER-LISTENER] ✓ Status is FINISHED - host left! Redirecting...');
+          final currentUser = ref.read(authRepositoryProvider).currentUser;
+          final isLoggedIn = currentUser != null && !currentUser.isAnonymous;
+          final destination = isLoggedIn ? '/home' : '/join';
+          print('[PLAYER-LISTENER] Redirecting to: $destination');
+          context.go(destination);
         }
       });
     });
@@ -64,11 +80,31 @@ class _PlayerLobbyScreenState extends ConsumerState<PlayerLobbyScreen>
               style: const TextStyle(color: Colors.white)),
         ),
         data: (session) {
+          // DEBUG: Log session status every build
+          print('[PLAYER-BUILD] Session status: ${session.status}, mounted: $mounted');
+          
+          // Check if host left (status changed to finished)
+          if (session.status == GameStatus.finished && mounted) {
+            print('[PLAYER-BUILD] *** DETECTED FINISHED STATUS - Host left! ***');
+            final currentUser = ref.read(authRepositoryProvider).currentUser;
+            final isLoggedIn = currentUser != null && !currentUser.isAnonymous;
+            final destination = isLoggedIn ? '/home' : '/join';
+            print('[PLAYER-BUILD] Scheduling redirect to: $destination');
+            
+            // Use Future.microtask to avoid navigation during build
+            Future.microtask(() {
+              if (mounted) {
+                print('[PLAYER-BUILD] Executing redirect to: $destination');
+                context.go(destination);
+              }
+            });
+          }
+          
           return SafeArea(
             child: Column(
               children: [
                 // ── Top section: game info ─────────────────────────────
-                _TopBar(session: session, playerId: widget.playerId ?? ''),
+                _TopBar(session: session, playerId: widget.playerId ?? '', sessionId: widget.sessionId),
  
                 // ── Waiting animation ──────────────────────────────────
                 const SizedBox(height: 24),
@@ -123,8 +159,9 @@ class _PlayerLobbyScreenState extends ConsumerState<PlayerLobbyScreen>
 class _TopBar extends ConsumerWidget {
   final GameSessionModel session;
   final String playerId;
+  final String sessionId;
  
-  const _TopBar({required this.session, required this.playerId});
+  const _TopBar({required this.session, required this.playerId, required this.sessionId});
  
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -225,18 +262,98 @@ class _TopBar extends ConsumerWidget {
                 style: GoogleFonts.poppins(color: Colors.white60)),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              // Check if user is logged in (not anonymous)
               final currentUser = ref.read(authRepositoryProvider).currentUser;
               final isLoggedIn = currentUser != null && !currentUser.isAnonymous;
-              
-              // Remove player from the game session
               final gameRepo = ref.read(gameRepositoryProvider);
-              gameRepo.removePlayer(playerId);
               
-              // Navigate to home for logged-in users, join for guests
+              print('\n======================================');
+              print('=== PLAYER LEAVING LOBBY ===');
+              print('======================================');
+              print('[LEAVE] Timestamp: ${DateTime.now()}');
+              print('[LEAVE] Current User ID: ${currentUser?.id}');
+              print('[LEAVE] Current User isAnonymous: ${currentUser?.isAnonymous}');
+              print('[LEAVE] Session ID: $sessionId');
+              print('[LEAVE] PlayerId from route: $playerId');
+              print('[LEAVE] IsLoggedIn: $isLoggedIn');
+              
+              try {
+                print('[LEAVE] Step 1: Checking if user is host...');
+                final session = await gameRepo.getSession(sessionId);
+                print('[LEAVE] Step 2: Got session - Status: ${session?.status}, HostId: ${session?.hostId}');
+                
+                if (session != null && session.hostId == currentUser?.id) {
+                  print('[LEAVE] *** USER IS HOST *** - Ending game session');
+                  await gameRepo.endSession(sessionId);
+                  print('[LEAVE] ✓ Game session ended');
+                } else {
+                  print('[LEAVE] User is a PLAYER - Proceeding with removal');
+                  
+                  String? playerIdToRemove;
+                  
+                  // Try playerId from route first
+                  if (playerId.isNotEmpty) {
+                    playerIdToRemove = playerId;
+                    print('[LEAVE] Using playerId from route: $playerId');
+                  } else {
+                    print('[LEAVE] playerId is empty, querying database...');
+                    // Query database to find player
+                    try {
+                      print('[LEAVE] Querying: SELECT id FROM game_players WHERE session_id=$sessionId AND user_id=${currentUser!.id}');
+                      final playersResponse = await supabase
+                          .from('game_players')
+                          .select('id, display_name')
+                          .eq('session_id', sessionId)
+                          .eq('user_id', currentUser!.id)
+                          .maybeSingle();
+                      
+                      print('[LEAVE] Query result: $playersResponse');
+                      
+                      if (playersResponse != null) {
+                        playerIdToRemove = playersResponse['id'];
+                        print('[LEAVE] ✓ Found player in DB: $playerIdToRemove (${playersResponse['display_name']})');
+                      } else {
+                        print('[LEAVE] ✗ No player found in database!');
+                      }
+                    } catch (e) {
+                      print('[LEAVE] ✗ Error finding player: $e');
+                    }
+                  }
+                  
+                  if (playerIdToRemove != null && playerIdToRemove.isNotEmpty) {
+                    try {
+                      print('[LEAVE] Attempting to remove player: $playerIdToRemove');
+                      await gameRepo.removePlayer(playerIdToRemove);
+                      print('[LEAVE] ✓ Player removal completed successfully');
+                    } catch (e) {
+                      print('[LEAVE] ✗ Error deleting player: $e');
+                    }
+                  } else {
+                    print('[LEAVE] ✗ No playerIdToRemove available!');
+                  }
+                }
+              } catch (e) {
+                print('[LEAVE] ✗ Error checking host status: $e');
+              }
+              
+              // Refresh cache
+              print('[LEAVE] Step 3: Invalidating Riverpod caches...');
+              print('[LEAVE] - Invalidating watchPlayersProvider($sessionId)');
+              ref.invalidate(watchPlayersProvider(sessionId));
+              print('[LEAVE] - Invalidating watchSessionProvider($sessionId)');
+              ref.invalidate(watchSessionProvider(sessionId));
+              print('[LEAVE] ✓ Caches invalidated - Stream will refresh');
+              
+              // Wait for updates
+              print('[LEAVE] Step 4: Waiting 800ms for realtime stream to update...');
+              await Future.delayed(const Duration(milliseconds: 800));
+              print('[LEAVE] ✓ Wait complete');
+              
+              print('[LEAVE] Step 5: Navigating to ${isLoggedIn ? '/home' : '/join'}');
               context.go(isLoggedIn ? '/home' : '/join');
+              print('[LEAVE] ✓ Navigation completed');
+              print('=== DONE ===\n');
             },
             child: Text('Leave',
                 style: GoogleFonts.poppins(color: Colors.redAccent)),

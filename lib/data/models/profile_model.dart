@@ -5,6 +5,8 @@ class ProfileModel {
   final String avatarUrl;
   final bool isGuest;
   final DateTime createdAt;
+  final int quizzesTaken;
+  final int totalPoints;
 
   const ProfileModel({
     required this.id,
@@ -12,6 +14,8 @@ class ProfileModel {
     required this.avatarUrl,
     this.isGuest = false,
     required this.createdAt,
+    this.quizzesTaken = 0,
+    this.totalPoints = 0,
   });
 
   factory ProfileModel.fromMap(Map<String, dynamic> map) => ProfileModel(
@@ -20,6 +24,8 @@ class ProfileModel {
     avatarUrl: map['avatar_url'] as String,
     isGuest: map['is_guest'] as bool? ?? false,
     createdAt: DateTime.parse(map['created_at'] as String),
+    quizzesTaken: map['quizzes_taken'] as int? ?? 0,
+    totalPoints: map['total_points'] as int? ?? 0,
   );
 
   // Note: snake_case keys — Supabase uses PostgreSQL naming conventions
@@ -28,5 +34,7 @@ class ProfileModel {
     'display_name': displayName,
     'avatar_url': avatarUrl,
     'is_guest': isGuest,
+    'quizzes_taken': quizzesTaken,
+    'total_points': totalPoints,
   };
 }

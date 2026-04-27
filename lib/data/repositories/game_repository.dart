@@ -140,7 +140,144 @@ class GameRepository {
 
   // ── Remove a player from session ──────────────────────────────────
   Future<void> removePlayer(String playerId) async {
-    await supabase.from('game_players').delete().eq('id', playerId);
+    try {
+      print('[REMOVE] Step 1: Starting removal of player: $playerId');
+      
+      // First, verify the player exists
+      final existing = await supabase
+          .from('game_players')
+          .select('id, display_name, session_id')
+          .eq('id', playerId)
+          .maybeSingle();
+      
+      print('[REMOVE] Step 2: Player exists before deletion: $existing');
+      
+      if (existing == null) {
+        print('[REMOVE] Player not found, returning');
+        return;
+      }
+      
+      // IMPORTANT: Delete player_answers FIRST (foreign key constraint)
+      print('[REMOVE] Step 3a: Deleting player answers for this player...');
+      final answersDeleted = await supabase
+          .from('player_answers')
+          .delete()
+          .eq('player_id', playerId);
+      print('[REMOVE] Step 3b: Deleted player answers');
+      
+      // Now delete the player
+      print('[REMOVE] Step 4: Deleting player record...');
+      final deleteResult = await supabase
+          .from('game_players')
+          .delete()
+          .eq('id', playerId);
+      
+      print('[REMOVE] Step 5: Delete executed');
+      
+      // Verify deletion
+      final afterDelete = await supabase
+          .from('game_players')
+          .select('id')
+          .eq('id', playerId)
+          .maybeSingle();
+      
+      print('[REMOVE] Step 6: Player exists after deletion: $afterDelete');
+      
+      if (afterDelete == null) {
+        print('[REMOVE] ✓ SUCCESS: Player $playerId has been removed');
+      } else {
+        print('[REMOVE] ✗ FAILED: Player still exists after deletion!');
+        throw Exception('Failed to delete player - foreign key constraint');
+      }
+    } catch (e) {
+      print('[REMOVE] ✗ ERROR: $e');
+      rethrow;
+    }
+  }
+
+  // ── Remove a player from session by userId ────────────────────────
+  Future<void> removePlayerByUserId(String sessionId, String userId) async {
+    try {
+      print('[REMOVE_BY_USERID] Starting removal of user: $userId in session: $sessionId');
+      
+      // First, find the player
+      final existing = await supabase
+          .from('game_players')
+          .select('id, display_name')
+          .eq('session_id', sessionId)
+          .eq('user_id', userId)
+          .maybeSingle();
+      
+      print('[REMOVE_BY_USERID] Found player: $existing');
+      
+      if (existing == null) {
+        print('[REMOVE_BY_USERID] WARNING: No player found with userId: $userId');
+        return;
+      }
+      
+      final playerId = existing['id'];
+      
+      // IMPORTANT: Delete player_answers FIRST (foreign key constraint)
+      print('[REMOVE_BY_USERID] Step 2a: Deleting player answers...');
+      await supabase
+          .from('player_answers')
+          .delete()
+          .eq('player_id', playerId);
+      print('[REMOVE_BY_USERID] Step 2b: Player answers deleted');
+      
+      // Now delete the player
+      print('[REMOVE_BY_USERID] Step 3: Deleting player record...');
+      await supabase
+          .from('game_players')
+          .delete()
+          .eq('session_id', sessionId)
+          .eq('user_id', userId);
+      
+      print('[REMOVE_BY_USERID] ✓ SUCCESS: Player $playerId removed');
+    } catch (e) {
+      print('[REMOVE_BY_USERID] ✗ ERROR: $e');
+      rethrow;
+    }
+  }
+
+  // ── End a game session ────────────────────────────────────────────
+  Future<void> endSession(String sessionId) async {
+    try {
+      print('[END_SESSION] Starting to end session: $sessionId');
+      
+      final result = await supabase
+          .from('game_sessions')
+          .update({'status': 'finished'})
+          .eq('id', sessionId)
+          .select();
+      
+      print('[END_SESSION] Update result: $result');
+      print('[END_SESSION] SUCCESS: Session ended');
+    } catch (e) {
+      print('[END_SESSION] ERROR: $e');
+      rethrow;
+    }
+  }
+
+  // ── Get session to check if host ──────────────────────────────────
+  Future<GameSessionModel?> getSession(String sessionId) async {
+    try {
+      print('[GET_SESSION] Fetching session: $sessionId');
+      
+      final data = await supabase
+          .from('game_sessions')
+          .select('id, code, quiz_id, host_id, status, current_question')
+          .eq('id', sessionId)
+          .single();
+      
+      print('[GET_SESSION] Session data: $data');
+      final session = GameSessionModel.fromMap(data);
+      print('[GET_SESSION] SUCCESS: host_id=${session.hostId}');
+      return session;
+    } catch (e) {
+      print('[GET_SESSION] ERROR: $e');
+      return null;
+    }
   }
 
   // ── Host controls ─────────────────────────────────────────────────
@@ -162,6 +299,41 @@ class GameRepository {
 
   Future<void> endGame(String sessionId) =>
       _updateSession(sessionId, {'status': 'finished'});
+
+  // ── Get user statistics (quizzes taken, total points) ──────────────
+  Future<Map<String, dynamic>> getUserStats(String userId) async {
+    try {
+      print('[USER-STATS] Fetching stats for user: $userId');
+      
+      // Get all game sessions where this user participated
+      final sessionsResponse = await supabase
+          .from('game_players')
+          .select('session_id, total_score')
+          .eq('user_id', userId);
+      
+      print('[USER-STATS] Found ${sessionsResponse.length} sessions');
+      
+      final sessions = sessionsResponse as List;
+      final quizzesTaken = sessions.length;
+      final totalPoints = sessions.fold<int>(
+        0,
+        (sum, session) => sum + (session['total_score'] as int? ?? 0),
+      );
+      
+      print('[USER-STATS] Quizzes: $quizzesTaken, Total Points: $totalPoints');
+      
+      return {
+        'quizzes_taken': quizzesTaken,
+        'total_points': totalPoints,
+      };
+    } catch (e) {
+      print('[USER-STATS] Error: $e');
+      return {
+        'quizzes_taken': 0,
+        'total_points': 0,
+      };
+    }
+  }
 
   Future<void> _updateSession(String id, Map<String, dynamic> data) async {
     await supabase.from('game_sessions').update(data).eq('id', id);

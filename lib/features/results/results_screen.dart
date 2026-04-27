@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../data/models/game_player_model.dart';
 import '../../data/repositories/providers.dart';
+import '../../main.dart';
 
 class ResultsScreen extends ConsumerWidget {
   final String sessionId;
@@ -220,10 +221,14 @@ class ResultsScreen extends ConsumerWidget {
                         height: 54,
                         child: ElevatedButton.icon(
                           onPressed: () {
-                            if (currentPlayer != null) {
-                              ref.read(gameRepositoryProvider).removePlayer(currentPlayer.id);
-                            }
+                            print('\n=== RESULTS: PLAY AGAIN (GUEST) ===');
+                            print('[RESULTS-PLAY] Timestamp: ${DateTime.now()}');
+                            print('[RESULTS-PLAY] Current User: ${currentUser?.id}');
+                            print('[RESULTS-PLAY] Session: $sessionId');
+                            print('[RESULTS-PLAY] Just navigating - NOT removing player');
+                            print('[RESULTS-PLAY] Navigating to /join');
                             context.go('/join');
+                            print('[RESULTS-PLAY] === DONE ===\n');
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF6C63FF),
@@ -246,10 +251,14 @@ class ResultsScreen extends ConsumerWidget {
                         height: 54,
                         child: ElevatedButton.icon(
                           onPressed: () {
-                            if (currentPlayer != null) {
-                              ref.read(gameRepositoryProvider).removePlayer(currentPlayer.id);
-                            }
+                            print('\n=== RESULTS: HOME (LOGGED IN) ===');
+                            print('[RESULTS-HOME] Timestamp: ${DateTime.now()}');
+                            print('[RESULTS-HOME] Current User: ${currentUser?.id}');
+                            print('[RESULTS-HOME] Session: $sessionId');
+                            print('[RESULTS-HOME] Just navigating - NOT removing player');
+                            print('[RESULTS-HOME] Navigating to /home');
                             context.go('/home');
+                            print('[RESULTS-HOME] === DONE ===\n');
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF6C63FF),

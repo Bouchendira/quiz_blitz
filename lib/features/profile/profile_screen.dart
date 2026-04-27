@@ -110,7 +110,7 @@ class ProfileScreen extends ConsumerWidget {
                             child: _StatCard(
                               icon: '🎮',
                               label: 'Quizzes Taken',
-                              value: '0',
+                              value: profile.quizzesTaken.toString(),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -118,7 +118,7 @@ class ProfileScreen extends ConsumerWidget {
                             child: _StatCard(
                               icon: '🏆',
                               label: 'Total Points',
-                              value: '0',
+                              value: profile.totalPoints.toString(),
                             ),
                           ),
                         ],

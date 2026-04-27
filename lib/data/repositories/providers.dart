@@ -15,9 +15,27 @@ final gameRepositoryProvider = Provider((ref) => GameRepository());
 // Current logged-in user profile
 final currentProfileProvider = FutureProvider<ProfileModel?>((ref) async {
   final auth = ref.watch(authRepositoryProvider);
+  final gameRepo = ref.watch(gameRepositoryProvider);
   final user = auth.currentUser;
   if (user == null) return null;
-  return auth.getProfile(user.id);
+  
+  // Get base profile
+  final profile = await auth.getProfile(user.id);
+  if (profile == null) return null;
+  
+  // Get user statistics (quizzes taken, total points)
+  final stats = await gameRepo.getUserStats(user.id);
+  
+  // Return profile with stats
+  return ProfileModel(
+    id: profile.id,
+    displayName: profile.displayName,
+    avatarUrl: profile.avatarUrl,
+    isGuest: profile.isGuest,
+    createdAt: profile.createdAt,
+    quizzesTaken: stats['quizzes_taken'] as int? ?? 0,
+    totalPoints: stats['total_points'] as int? ?? 0,
+  );
 });
 
 // Riverpod stream providers for real-time data
