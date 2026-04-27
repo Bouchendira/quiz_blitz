@@ -60,6 +60,24 @@ class SettingsScreen extends ConsumerWidget {
                       onTap: () => context.push('/profile'),
                     ),
                     _SettingItem(
+                      icon: Icons.refresh,
+                      title: 'Refresh Profile Data',
+                      subtitle: 'Reload all profile information',
+                      onTap: () {
+                        ref.refresh(currentProfileProvider);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Profile data refreshed!',
+                              style: GoogleFonts.nunito(color: Colors.white),
+                            ),
+                            backgroundColor: Colors.green.withOpacity(0.7),
+                            duration: const Duration(milliseconds: 1500),
+                          ),
+                        );
+                      },
+                    ),
+                    _SettingItem(
                       icon: Icons.security_outlined,
                       title: 'Privacy & Security',
                       subtitle: 'Manage your privacy settings',

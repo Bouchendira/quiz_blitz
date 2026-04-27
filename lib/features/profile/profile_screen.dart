@@ -158,7 +158,7 @@ class ProfileScreen extends ConsumerWidget {
                               fontSize: 18,
                               fontWeight: FontWeight.w600)),
                       const SizedBox(height: 12),
-                      _QuizHistoryPlaceholder(),
+                      _QuizHistory(userId: profile.id),
                     ],
                   )
                 else
@@ -291,30 +291,111 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-class _QuizHistoryPlaceholder extends StatelessWidget {
+class _QuizHistory extends ConsumerWidget {
+  final String userId;
+
+  const _QuizHistory({required this.userId});
+
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(16),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final historyAsync = ref.watch(userQuizHistoryProvider(userId));
+
+    return historyAsync.when(
+      loading: () => const Center(
+        child: CircularProgressIndicator(color: Colors.white),
       ),
-      child: Column(
-        children: [
-          const Text('📚',
-              style: TextStyle(fontSize: 40)),
-          const SizedBox(height: 12),
-          Text('No quizzes yet',
-              style: GoogleFonts.fredoka(
-                  color: Colors.white70, fontSize: 16)),
-          const SizedBox(height: 8),
-          Text('Start playing quizzes to see your history here!',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.nunito(
-                  color: Colors.white54, fontSize: 12)),
-        ],
+      error: (e, _) => Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.red.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text('Error loading history: $e',
+            style: GoogleFonts.nunito(color: Colors.red)),
       ),
+      data: (history) {
+        if (history.isEmpty) {
+          return Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              children: [
+                const Text('📚', style: TextStyle(fontSize: 40)),
+                const SizedBox(height: 12),
+                Text('No quizzes yet',
+                    style: GoogleFonts.fredoka(
+                        color: Colors.white70, fontSize: 16)),
+                const SizedBox(height: 8),
+                Text('Start playing quizzes to see your history here!',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.nunito(
+                        color: Colors.white54, fontSize: 12)),
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          children: history.map((quiz) {
+            final playedAt = quiz['played_at'] as DateTime;
+            final dateStr =
+                '${playedAt.month}/${playedAt.day}/${playedAt.year}';
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white.withOpacity(0.1)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(quiz['quiz_title'] as String,
+                            style: GoogleFonts.fredoka(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
+                        const SizedBox(height: 4),
+                        Text(dateStr,
+                            style: GoogleFonts.nunito(
+                              color: Colors.white54,
+                              fontSize: 12,
+                            )),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF6C63FF).withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text('${quiz['score']} pts',
+                        style: GoogleFonts.fredoka(
+                          color: const Color(0xFFFFD700),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        )),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        );
+      },
     );
   }
 }
+

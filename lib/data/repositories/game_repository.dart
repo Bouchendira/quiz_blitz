@@ -335,6 +335,72 @@ class GameRepository {
     }
   }
 
+  // ── Get user quiz history ────────────────────────────────────────
+  Future<List<Map<String, dynamic>>> getUserQuizHistory(String userId) async {
+    try {
+      print('[QUIZ-HISTORY] Fetching quiz history for user: $userId');
+      
+      // Get all game sessions with quiz details where user participated
+      final historyResponse = await supabase
+          .from('game_players')
+          .select('''
+            session_id,
+            total_score,
+            game_sessions (
+              id,
+              code,
+              status,
+              created_at,
+              quizzes (
+                id,
+                title
+              )
+            )
+          ''')
+          .eq('user_id', userId)
+          .order('game_sessions(created_at)', ascending: false);
+      
+      print('[QUIZ-HISTORY] Found ${historyResponse.length} quiz participations');
+      print('[QUIZ-HISTORY] Raw response: $historyResponse');
+      
+      // Transform the response into a cleaner format
+      final history = (historyResponse as List).map((item) {
+        try {
+          final gameSession = item['game_sessions'] as Map<String, dynamic>;
+          print('[QUIZ-HISTORY] Game session: $gameSession');
+          
+          // quizzes is a Map, not a List (one-to-one relationship)
+          final quizzesData = gameSession['quizzes'];
+          print('[QUIZ-HISTORY] Quizzes data: $quizzesData (type: ${quizzesData.runtimeType})');
+          
+          final quiz = quizzesData is Map ? quizzesData as Map<String, dynamic> : null;
+          
+          final historyItem = {
+            'session_id': item['session_id'],
+            'quiz_id': quiz?['id'] ?? 'unknown',
+            'quiz_title': quiz?['title'] ?? 'Unknown Quiz',
+            'score': item['total_score'] as int,
+            'code': gameSession['code'],
+            'status': gameSession['status'],
+            'played_at': DateTime.parse(gameSession['created_at'] as String),
+          };
+          
+          print('[QUIZ-HISTORY] History item: $historyItem');
+          return historyItem;
+        } catch (e) {
+          print('[QUIZ-HISTORY] Error mapping item: $e');
+          rethrow;
+        }
+      }).toList();
+      
+      print('[QUIZ-HISTORY] ✓ Successfully fetched ${history.length} quiz history items');
+      return history;
+    } catch (e) {
+      print('[QUIZ-HISTORY] Error: $e');
+      return [];
+    }
+  }
+
   Future<void> _updateSession(String id, Map<String, dynamic> data) async {
     await supabase.from('game_sessions').update(data).eq('id', id);
   }

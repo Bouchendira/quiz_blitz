@@ -60,3 +60,8 @@ final allPlayersAnsweredProvider = FutureProvider.family<bool, ({String sessionI
 final quizProvider = FutureProvider.family<QuizModel?, String>((ref, quizId) async {
   return ref.read(quizRepositoryProvider).getQuiz(quizId);
 });
+
+final userQuizHistoryProvider = FutureProvider.family<List<Map<String, dynamic>>, String>(
+  (ref, userId) =>
+      ref.read(gameRepositoryProvider).getUserQuizHistory(userId),
+);
